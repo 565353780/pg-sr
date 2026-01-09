@@ -1,9 +1,9 @@
-DATA_FOLDER=$HOME/chLi/Dataset/GS/haizei_1/
+DATA_FOLDER=$HOME/chLi/Dataset/GS/haizei_1
 ITERATIONS=30000
 
 CUDA_VISIBLE_DEVICES=3 \
   python train.py \
-  -s ${DATA_FOLDER}/gs/ \
+  -s ${DATA_FOLDER}/mv_2d3d_match/colmap/ \
   -m ${DATA_FOLDER}/pgsr/ \
   --iterations ${ITERATIONS} \
   --max_abs_split_points 0 \

@@ -1,14 +1,3 @@
-#
-# Copyright (C) 2023, Inria
-# GRAPHDECO research group, https://team.inria.fr/graphdeco
-# All rights reserved.
-#
-# This software is free for non-commercial, research and evaluation use 
-# under the terms of the LICENSE.md file.
-#
-# For inquiries contact  george.drettakis@inria.fr
-#
-
 import os
 import torch
 import random
@@ -52,11 +41,11 @@ def gen_virtul_cam(cam, trans_noise=1.0, deg_noise=15.0):
     Rx = np.array([[1, 0, 0],
                     [0, np.cos(rx), -np.sin(rx)],
                     [0, np.sin(rx), np.cos(rx)]])
-    
+
     Ry = np.array([[np.cos(ry), 0, np.sin(ry)],
                     [0, 1, 0],
                     [-np.sin(ry), 0, np.cos(ry)]])
-    
+
     Rz = np.array([[np.cos(rz), -np.sin(rz), 0],
                     [np.sin(rz), np.cos(rz), 0],
                     [0, 0, 1]])
@@ -75,17 +64,6 @@ def gen_virtul_cam(cam, trans_noise=1.0, deg_noise=15.0):
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
-    # backup main code
-    cmd = f'cp ./train.py {dataset.model_path}/'
-    os.system(cmd)
-    cmd = f'cp -rf ./arguments {dataset.model_path}/'
-    os.system(cmd)
-    cmd = f'cp -rf ./gaussian_renderer {dataset.model_path}/'
-    os.system(cmd)
-    cmd = f'cp -rf ./scene {dataset.model_path}/'
-    os.system(cmd)
-    cmd = f'cp -rf ./utils {dataset.model_path}/'
-    os.system(cmd)
 
     gaussians = GaussianModel(dataset.sh_degree)
     scene = Scene(dataset, gaussians)
@@ -94,7 +72,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     app_model = AppModel()
     app_model.train()
     app_model.cuda()
-    
+
     if checkpoint:
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
@@ -118,21 +96,6 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     os.makedirs(debug_path, exist_ok=True)
 
     for iteration in range(first_iter, opt.iterations + 1):
-        # if network_gui.conn == None:
-        #     network_gui.try_connect()
-        # while network_gui.conn != None:
-        #     try:
-        #         net_image_bytes = None
-        #         custom_cam, do_training, pipe.convert_SHs_python, pipe.compute_cov3D_python, keep_alive, scaling_modifer = network_gui.receive()
-        #         if custom_cam != None:
-        #             net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
-        #             net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
-        #         network_gui.send(net_image_bytes, dataset.source_path)
-        #         if do_training and ((iteration < int(opt.iterations)) or not keep_alive):
-        #             break
-        #     except Exception as e:
-        #         network_gui.conn = None
-
         iter_start.record()
         gaussians.update_learning_rate(iteration)
         # Every 1000 its we increase the levels of SH up to a maximum degree
@@ -157,7 +120,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                             return_plane=iteration>opt.single_view_weight_from_iter, return_depth_normal=iteration>opt.single_view_weight_from_iter)
         image, viewspace_point_tensor, visibility_filter, radii = \
             render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-        
+
         # Loss
         ssim_loss = (1.0 - ssim(image, gt_image))
         if 'app_image' in render_pkg and ssim_loss < 0.5:
@@ -167,7 +130,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             Ll1 = l1_loss(image, gt_image)
         image_loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * ssim_loss
         loss = image_loss.clone()
-        
+
         # scale loss
         if visibility_filter.sum() > 0:
             scale = gaussians.get_scaling[visibility_filter]
@@ -215,7 +178,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 pts = gaussians.get_points_from_depth(viewpoint_cam, render_pkg['plane_depth'])
                 pts_in_nearest_cam = pts @ nearest_cam.world_view_transform[:3,:3] + nearest_cam.world_view_transform[3,:3]
                 map_z, d_mask = gaussians.get_points_depth_in_depth_map(nearest_cam, nearest_render_pkg['plane_depth'], pts_in_nearest_cam)
-                
+
                 pts_in_nearest_cam = pts_in_nearest_cam / (pts_in_nearest_cam[:,2:3])
                 pts_in_nearest_cam = pts_in_nearest_cam * map_z.squeeze()[...,None]
                 R = torch.tensor(nearest_cam.R).float().cuda()
@@ -277,7 +240,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                             pixels = pixels.reshape(-1,2)[valid_indices]
                             offsets = patch_offsets(patch_size, pixels.device)
                             ori_pixels_patch = pixels.reshape(-1, 1, 2) / viewpoint_cam.ncc_scale + offsets.float()
-                            
+
                             H, W = gt_image_gray.squeeze().shape
                             pixels_patch = ori_pixels_patch.clone()
                             pixels_patch[:, :, 0] = 2 * pixels_patch[:, :, 0] / (W - 1) - 1.0
@@ -304,7 +267,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                                         ref_local_n[:,:,None].expand(ref_local_d.shape[0],3,1).permute(0, 2, 1))/ref_local_d[...,None,None]
                         H_ref_to_neareast = torch.matmul(nearest_cam.get_k(nearest_cam.ncc_scale)[None].expand(ref_local_d.shape[0], 3, 3), H_ref_to_neareast)
                         H_ref_to_neareast = H_ref_to_neareast @ viewpoint_cam.get_inv_k(viewpoint_cam.ncc_scale)
-                        
+
                         ## compute neareast frame patch
                         grid = patch_warp(H_ref_to_neareast.reshape(-1,3,3), ori_pixels_patch)
                         grid[:, :, 0] = 2 * grid[:, :, 0] / (W - 1) - 1.0
@@ -312,7 +275,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                         _, nearest_image_gray = nearest_cam.get_image()
                         sampled_gray_val = F.grid_sample(nearest_image_gray[None], grid.reshape(1, -1, 1, 2), align_corners=True)
                         sampled_gray_val = sampled_gray_val.reshape(-1, total_patch_size)
-                        
+
                         ## compute loss
                         ncc, ncc_mask = lncc(ref_gray_val, sampled_gray_val)
                         mask = ncc_mask.reshape(-1)
@@ -350,7 +313,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
-                    
+
             # Densification
             if iteration < opt.densify_until_iter:
                 # Keep track of max radii in image-space for pruning
@@ -363,7 +326,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     size_threshold = 20 if iteration > opt.opacity_reset_interval else None
                     gaussians.densify_and_prune(opt.densify_grad_threshold, opt.densify_abs_grad_threshold, 
                                                 opt.opacity_cull_threshold, scene.cameras_extent, size_threshold)
-            
+
             # multi-view observe trim
             if opt.use_multi_view_trim and iteration % 1000 == 0 and iteration < opt.densify_until_iter:
                 observe_the = 2
@@ -392,7 +355,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
                 app_model.save_weights(scene.model_path, iteration)
-    
+
     app_model.save_weights(scene.model_path, opt.iterations)
     torch.cuda.empty_cache()
 
@@ -404,7 +367,7 @@ def prepare_output_and_logger(args):
             unique_str = str(uuid.uuid4())
         args.model_path = os.path.join("./output/", unique_str[0:10])
 
-        
+
     # Set up output folder
     print("Output folder: {}".format(args.model_path))
     os.makedirs(args.model_path, exist_ok = True)
@@ -481,8 +444,6 @@ if __name__ == "__main__":
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
-    # Start GUI server, configure and run training
-    # network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
     training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
 
